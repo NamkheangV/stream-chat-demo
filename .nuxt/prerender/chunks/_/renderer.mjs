@@ -1,13 +1,27 @@
 import { createRenderer, getRequestDependencies, getPreloadLinks, getPrefetchLinks } from 'file://D:/Developer/twitch-overlay/node_modules/vue-bundle-renderer/dist/runtime.mjs';
 import { getResponseStatusText, getResponseStatus, getQuery, createError, appendResponseHeader } from 'file://D:/Developer/twitch-overlay/node_modules/h3/dist/index.mjs';
 import { joinRelativeURL, joinURL } from 'file://D:/Developer/twitch-overlay/node_modules/ufo/dist/index.mjs';
-import { renderToString } from 'file://D:/Developer/twitch-overlay/node_modules/vue/server-renderer/index.mjs';
 import { a as useRuntimeConfig, b as useStorage, d as defineRenderHandler, g as getRouteRules, u as useNitroApp } from './nitro.mjs';
 import { createHead as createHead$1, propsToString, renderSSRHead } from 'file://D:/Developer/twitch-overlay/node_modules/unhead/dist/server.mjs';
 import { stringify, uneval } from 'file://D:/Developer/twitch-overlay/node_modules/devalue/index.js';
-import { walkResolver } from 'file://D:/Developer/twitch-overlay/node_modules/unhead/dist/utils.mjs';
-import { isRef, toValue, hasInjectionContext, inject, ref, watchEffect, getCurrentInstance, onBeforeUnmount, onDeactivated, onActivated } from 'file://D:/Developer/twitch-overlay/node_modules/vue/index.mjs';
+import { isRef, toValue } from 'file://D:/Developer/twitch-overlay/node_modules/vue/index.mjs';
 import { DeprecationsPlugin, PromisesPlugin, TemplateParamsPlugin, AliasSortingPlugin } from 'file://D:/Developer/twitch-overlay/node_modules/unhead/dist/plugins.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/destr/dist/index.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/hookable/dist/index.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/ofetch/dist/node.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/node-mock-http/dist/index.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/unstorage/dist/index.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/unstorage/drivers/fs.mjs';
+import 'file:///D:/Developer/twitch-overlay/node_modules/@nuxt/nitro-server/dist/runtime/utils/cache-driver.js';
+import 'file://D:/Developer/twitch-overlay/node_modules/unstorage/drivers/fs-lite.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/ohash/dist/index.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/klona/dist/index.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/defu/dist/defu.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/scule/dist/index.mjs';
+import 'file://D:/Developer/twitch-overlay/node_modules/radix3/dist/index.mjs';
+import 'node:fs';
+import 'node:url';
+import 'file://D:/Developer/twitch-overlay/node_modules/pathe/dist/index.mjs';
 
 const VueResolver = (_, value) => {
   return isRef(value) ? toValue(value) : value;
@@ -27,46 +41,6 @@ function vueInstall(head) {
 }
 
 // @__NO_SIDE_EFFECTS__
-function injectHead() {
-  if (hasInjectionContext()) {
-    const instance = inject(headSymbol);
-    if (instance) {
-      return instance;
-    }
-  }
-  throw new Error("useHead() was called without provide context, ensure you call it through the setup() function.");
-}
-function useHead(input, options = {}) {
-  const head = options.head || /* @__PURE__ */ injectHead();
-  return head.ssr ? head.push(input || {}, options) : clientUseHead(head, input, options);
-}
-function clientUseHead(head, input, options = {}) {
-  const deactivated = ref(false);
-  let entry;
-  watchEffect(() => {
-    const i = deactivated.value ? {} : walkResolver(input, VueResolver);
-    if (entry) {
-      entry.patch(i);
-    } else {
-      entry = head.push(i, options);
-    }
-  });
-  const vm = getCurrentInstance();
-  if (vm) {
-    onBeforeUnmount(() => {
-      entry.dispose();
-    });
-    onDeactivated(() => {
-      deactivated.value = true;
-    });
-    onActivated(() => {
-      deactivated.value = false;
-    });
-  }
-  return entry;
-}
-
-// @__NO_SIDE_EFFECTS__
 function createHead(options = {}) {
   const head = createHead$1({
     ...options,
@@ -76,7 +50,7 @@ function createHead(options = {}) {
   return head;
 }
 
-const NUXT_PAYLOAD_EXTRACTION = true;
+const NUXT_RUNTIME_PAYLOAD_EXTRACTION = false;
 
 const appHead = {"meta":[{"name":"viewport","content":"width=device-width, initial-scale=1"},{"charset":"utf-8"}],"link":[{"rel":"preconnect","href":"https://fonts.googleapis.com"},{"rel":"stylesheet","href":"https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Noto+Sans+Thai:wght@300;400;500;700&display=swap"}],"style":[],"script":[],"noscript":[]};
 
@@ -90,10 +64,6 @@ const appTeleportAttrs = {"id":"teleports"};
 
 const appId = "nuxt-app";
 
-function baseURL() {
-	// TODO: support passing event to `useRuntimeConfig`
-	return useRuntimeConfig().app.baseURL;
-}
 function buildAssetsDir() {
 	// TODO: support passing event to `useRuntimeConfig`
 	return useRuntimeConfig().app.buildAssetsDir;
@@ -111,31 +81,7 @@ function publicAssetsURL(...path) {
 const APP_ROOT_OPEN_TAG = `<${appRootTag}${propsToString(appRootAttrs)}>`;
 const APP_ROOT_CLOSE_TAG = `</${appRootTag}>`;
 // @ts-expect-error file will be produced after app build
-const getServerEntry = () => import('../build/server.mjs').then((r) => r.default || r);
-// @ts-expect-error file will be produced after app build
 const getPrecomputedDependencies = () => import('../build/client.precomputed.mjs').then((r) => r.default || r).then((r) => typeof r === "function" ? r() : r);
-// -- SSR Renderer --
-const getSSRRenderer = lazyCachedFunction(async () => {
-	// Load server bundle
-	const createSSRApp = await getServerEntry();
-	if (!createSSRApp) {
-		throw new Error("Server bundle is not available");
-	}
-	// Load precomputed dependencies
-	const precomputed = await getPrecomputedDependencies();
-	// Create renderer
-	const renderer = createRenderer(createSSRApp, {
-		precomputed,
-		manifest: undefined,
-		renderToString: renderToString$1,
-		buildAssetsURL
-	});
-	async function renderToString$1(input, context) {
-		const html = await renderToString(input, context);
-		return APP_ROOT_OPEN_TAG + html + APP_ROOT_CLOSE_TAG;
-	}
-	return renderer;
-});
 // -- SPA Renderer --
 const getSPARenderer = lazyCachedFunction(async () => {
 	const precomputed = await getPrecomputedDependencies();
@@ -181,10 +127,8 @@ function lazyCachedFunction(fn) {
 	};
 }
 function getRenderer(ssrContext) {
-	return ssrContext.noSSR ? getSPARenderer() : getSSRRenderer();
+	return getSPARenderer() ;
 }
-// @ts-expect-error file will be produced after app build
-const getSSRStyles = lazyCachedFunction(() => import('../build/styles.mjs').then((r) => r.default || r));
 
 const payloadCache = useStorage("internal:nuxt:prerender:payload") ;
 useStorage("internal:nuxt:prerender:island") ;
@@ -207,7 +151,7 @@ function renderPayloadJsonScript(opts) {
 		"type": "application/json",
 		"innerHTML": contents,
 		"data-nuxt-data": appId,
-		"data-ssr": !(opts.ssrContext.noSSR)
+		"data-ssr": false
 	};
 	{
 		payload.id = "__NUXT_DATA__";
@@ -246,17 +190,12 @@ const unheadOptions = {
   plugins: [DeprecationsPlugin, PromisesPlugin, TemplateParamsPlugin, AliasSortingPlugin],
 };
 
-const PRERENDER_NO_SSR_ROUTES = new Set([
-	"/index.html",
-	"/200.html",
-	"/404.html"
-]);
 function createSSRContext(event) {
 	const ssrContext = {
 		url: event.path,
 		event,
 		runtimeConfig: useRuntimeConfig(event),
-		noSSR: event.context.nuxt?.noSSR || (PRERENDER_NO_SSR_ROUTES.has(event.path) ),
+		noSSR: true,
 		head: createHead(unheadOptions),
 		error: false,
 		nuxt: undefined,
@@ -275,22 +214,7 @@ function setSSRError(ssrContext, error) {
 	ssrContext.url = error.url;
 }
 
-async function renderInlineStyles(usedModules) {
-	const styleMap = await getSSRStyles();
-	const inlinedStyles = new Set();
-	for (const mod of usedModules) {
-		if (mod in styleMap && styleMap[mod]) {
-			for (const style of await styleMap[mod]()) {
-				inlinedStyles.add(style);
-			}
-		}
-	}
-	return Array.from(inlinedStyles).map((style) => ({ innerHTML: style }));
-}
-
 const renderSSRHeadOptions = {"omitLineBreaks":false};
-
-const entryIds = ["node_modules/nuxt/dist/app/entry.js"];
 
 // @ts-expect-error private property consumed by vite-generated url helpers
 globalThis.__buildAssetsURL = buildAssetsURL;
@@ -329,7 +253,7 @@ const handler = defineRenderHandler(async (event) => {
 	// Get route options (for `ssr: false`, `isr`, `cache` and `noScripts`)
 	const routeOptions = getRouteRules(event);
 	// Whether we are prerendering route or using ISR/SWR caching
-	const _PAYLOAD_EXTRACTION = !ssrContext.noSSR && (NUXT_PAYLOAD_EXTRACTION);
+	const _PAYLOAD_EXTRACTION = !ssrContext.noSSR && (NUXT_RUNTIME_PAYLOAD_EXTRACTION);
 	const isRenderingPayload = (_PAYLOAD_EXTRACTION || false) && PAYLOAD_URL_RE.test(ssrContext.url);
 	if (isRenderingPayload) {
 		const url = ssrContext.url.substring(0, ssrContext.url.lastIndexOf("/")) || "/";
@@ -344,12 +268,7 @@ const handler = defineRenderHandler(async (event) => {
 	}
 	const payloadURL = _PAYLOAD_EXTRACTION ? joinURL(ssrContext.runtimeConfig.app.cdnURL || ssrContext.runtimeConfig.app.baseURL, ssrContext.url.replace(/\?.*$/, ""), PAYLOAD_FILENAME) + "?" + ssrContext.runtimeConfig.app.buildId : undefined;
 	// Render app
-	const renderer = await getRenderer(ssrContext);
-	{
-		for (const id of entryIds) {
-			ssrContext.modules.add(id);
-		}
-	}
+	const renderer = await getRenderer();
 	const _rendered = await renderer.renderToString(ssrContext).catch(async (error) => {
 		// We use error to bypass full render if we have an early response we can make
 		// TODO: remove _renderResponse in nuxt v5
@@ -363,7 +282,7 @@ const handler = defineRenderHandler(async (event) => {
 	});
 	// Render inline styles
 	// TODO: remove _renderResponse in nuxt v5
-	const inlinedStyles = !ssrContext["~renderResponse"] && !ssrContext._renderResponse && !isRenderingPayload ? await renderInlineStyles(ssrContext.modules ?? []) : [];
+	const inlinedStyles = [];
 	await ssrContext.nuxt?.hooks.callHook("app:rendered", {
 		ssrContext,
 		renderResult: _rendered
@@ -515,10 +434,5 @@ function renderHTMLDocument(html) {
 	return "<!DOCTYPE html>" + `<html${joinAttrs(html.htmlAttrs)}>` + `<head>${joinTags(html.head)}</head>` + `<body${joinAttrs(html.bodyAttrs)}>${joinTags(html.bodyPrepend)}${joinTags(html.body)}${joinTags(html.bodyAppend)}</body>` + "</html>";
 }
 
-const renderer = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
-  __proto__: null,
-  default: handler
-}, Symbol.toStringTag, { value: 'Module' }));
-
-export { baseURL as b, headSymbol as h, renderer as r, useHead as u };
+export { handler as default };
 //# sourceMappingURL=renderer.mjs.map

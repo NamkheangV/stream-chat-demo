@@ -607,7 +607,7 @@ function _expandFromEnv(value) {
 const _inlineRuntimeConfig = {
   "app": {
     "baseURL": "/stream-chat-demo/",
-    "buildId": "e35244d7-952d-4eec-b7dd-2b1383439a36",
+    "buildId": "c127785d-90a4-4fc6-88d3-7e9730da4c5e",
     "buildAssetsDir": "/_nuxt/",
     "cdnURL": ""
   },
@@ -1033,7 +1033,7 @@ const _otSoDb = eventHandler((event) => {
 
 const _SxA8c9 = defineEventHandler(() => {});
 
-const _lazy_Qk9AVK = () => import('./renderer.mjs').then(function (n) { return n.r; });
+const _lazy_Qk9AVK = () => import('./renderer.mjs');
 
 const handlers = [
   { route: '', handler: _otSoDb, lazy: false, middleware: true, method: undefined },

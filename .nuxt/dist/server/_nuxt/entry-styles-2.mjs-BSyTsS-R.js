@@ -1,5 +1,0 @@
-const global = ':root{--font-display:"Syne","Noto Sans Thai",sans-serif;--font-body:"DM Sans","Noto Sans Thai",system-ui,sans-serif;--bubble-bg-r:10;--bubble-bg-g:12;--bubble-bg-b:22;--bubble-opacity:.82;--bubble-bg:rgba(var(--bubble-bg-r),var(--bubble-bg-g),var(--bubble-bg-b),var(--bubble-opacity));--bubble-border:hsla(0,0%,100%,.07);--bubble-radius:16px;--bubble-blur:14px;--bubble-shadow:0 4px 24px rgba(0,0,0,.45);--accent-r:126;--accent-g:207;--accent-b:220;--accent-opacity:.55;--accent-color:rgba(var(--accent-r),var(--accent-g),var(--accent-b),var(--accent-opacity));--text-color:#dde3ee;--font-size-msg:14px;--font-size-user:13px;--chat-width:340px;--msg-gap:10px;--color-broadcaster:gold;--color-moderator:#00e676;--color-vip:#e040fb;--color-subscriber:#40c4ff;--color-default:#fff;--emote-size:26px;--badge-size:16px}*,:after,:before{box-sizing:border-box;margin:0;padding:0}body,html{background:transparent;font-family:var(--font-body)}';
-export {
-  global as default
-};
-//# sourceMappingURL=entry-styles-2.mjs-BSyTsS-R.js.map
