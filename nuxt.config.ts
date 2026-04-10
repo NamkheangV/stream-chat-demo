@@ -10,6 +10,7 @@ export default defineNuxtConfig({
 
   // app head
   app: {
+    baseURL: '/stream-chat-demo/',
     head: {
       link: [
         {
