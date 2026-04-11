@@ -3,9 +3,9 @@ export default defineNuxtConfig({
     devtools: { enabled: false },
 
     // ── GitHub Pages via /docs folder ────────────────────────
-    // เปลี่ยน '/twitch-overlay/' ให้ตรงกับชื่อ repo ของคุณ
+    // เปลี่ยน '/stream-chat-demo/' ให้ตรงกับชื่อ repo ของคุณ
     app: {
-        baseURL: '/twitch-overlay/',
+        baseURL: '/stream-chat-demo/',
 
         head: {
             link: [

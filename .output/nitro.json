@@ -1,5 +1,5 @@
 {
-  "date": "2026-04-11T07:55:46.814Z",
+  "date": "2026-04-11T08:12:15.458Z",
   "preset": "static",
   "framework": {
     "name": "nuxt",
@@ -9,7 +9,7 @@
     "nitro": "2.13.3"
   },
   "commands": {
-    "preview": "npx serve public"
+    "preview": "npx serve ../docs"
   },
   "config": {}
 }
