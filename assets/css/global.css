@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai+Looped:wght@100..900&family=Noto+Serif+JP:wght@200..900&family=Yuji+Mai&display=swap');
+
 /* ============================================================
    global.css — Design Tokens & Base Styles
    แก้ค่า default ของ overlay ได้ที่นี่
@@ -6,8 +8,8 @@
 
 /* ── Default design tokens ───────────────────────────────── */
 :root {
-    --font-display: 'Syne', 'Noto Sans Thai', sans-serif;
-    --font-body: 'DM Sans', 'Noto Sans Thai', system-ui, sans-serif;
+    --font-display: 'Syne', 'Noto Sans Thai Looped', sans-serif;
+    --font-body: 'DM Sans', 'Noto Sans Thai Looped', system-ui, sans-serif;
 
     /* Bubble */
     --bubble-bg-r: 10;

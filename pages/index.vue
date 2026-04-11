@@ -84,10 +84,10 @@ function parseEmotes(message: string, emotes?: Record<string, string[]>): string
 
     let result = message
     for (const { id, start, end } of positions) {
-        const name = escapeHtml(result.slice(start, end + 1))
+        const name = message.slice(start, end + 1)
         // 3.0 = 3× resolution — คมชัดบน OBS 4K
-        const img = `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${name}" title="${name}">`
-        result = escapeHtml(result.slice(0, start)) + img + escapeHtml(result.slice(end + 1))
+        const img = `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${escapeHtml(name)}" title="${escapeHtml(name)}">`
+        result = result.slice(0, start) + img + result.slice(end + 1)
     }
     return result
 }
