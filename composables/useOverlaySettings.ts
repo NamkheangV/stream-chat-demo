@@ -16,9 +16,9 @@ export interface BadgeImages {
     broadcaster: string   // URL หรือ base64 data URL
     moderator: string
     vip: string
-    subscriber: string
-    // sub2: string
-    // sub3: string
+    subscriber: string   // tier 1
+    sub2: string   // tier 2
+    sub3: string   // tier 3
 
     // subscriber ตามระยะเวลา
     sub_1month: string
@@ -75,8 +75,8 @@ export const DEFAULT_BADGE_IMAGES: BadgeImages = {
     moderator: '/badges/moderator.svg',
     vip: '/badges/vip.svg',
     subscriber: '/badges/sub1.svg',
-    // sub2: '/badges/sub2.svg',
-    // sub3: '/badges/sub3.svg',
+    sub2: '/badges/sub2.svg',
+    sub3: '/badges/sub3.svg',
 
     sub_1month: '/badges/sub_1month.svg',
     sub_2month: '/badges/sub_2month.svg',
@@ -98,8 +98,8 @@ export const TWITCH_CDN_BADGES: BadgeImages = {
     moderator: 'https://static-cdn.jtvnw.net/badges/v1/3267646d-33f0-4b17-b3df-f923a41db1d0/2',
     vip: 'https://static-cdn.jtvnw.net/badges/v1/b817aba4-fad8-49e2-b88a-7cc744dfa6ec/2',
     subscriber: 'https://static-cdn.jtvnw.net/badges/v1/0e6c1a38-98a9-4d8a-b8f4-8f6bbf5e09c2/2',
-    // sub2: 'https://static-cdn.jtvnw.net/badges/v1/0e6c1a38-98a9-4d8a-b8f4-8f6bbf5e09c2/2',
-    // sub3: 'https://static-cdn.jtvnw.net/badges/v1/0e6c1a38-98a9-4d8a-b8f4-8f6bbf5e09c2/2',
+    sub2: 'https://static-cdn.jtvnw.net/badges/v1/0e6c1a38-98a9-4d8a-b8f4-8f6bbf5e09c2/2',
+    sub3: 'https://static-cdn.jtvnw.net/badges/v1/0e6c1a38-98a9-4d8a-b8f4-8f6bbf5e09c2/2',
     sub_1month: '',
     sub_2month: '',
     sub_3month: '',
@@ -195,45 +195,23 @@ export function applyCssVars(s: OverlaySettings) {
 }
 
 // ── Encode settings → URL query string ──────────────────────
+// badgeImages ไม่ encode ลง URL อีกต่อไป → เก็บใน localStorage แยก (BADGE_KEY)
+// เพื่อป้องกัน HTTP 431 Request Header Fields Too Large
 export function encodeSettingsToUrl(s: OverlaySettings): string {
     const params = new URLSearchParams()
-
     for (const [field, key] of Object.entries(PARAM_MAP)) {
         params.set(key, String((s as any)[field]))
     }
-
-    // encode badgeImages เป็น JSON → base64 → param "bi"
-    // ข้าม default paths เพื่อ URL สั้นลง (overlay จะใช้ default เองถ้าไม่มี param)
-    const customBadges: Partial<BadgeImages> = {}
-    let hasCustom = false
-    for (const [k, v] of Object.entries(s.badgeImages) as [keyof BadgeImages, string][]) {
-        if (v !== DEFAULT_BADGE_IMAGES[k]) {
-            customBadges[k] = v
-            hasCustom = true
-        }
-    }
-    if (hasCustom) {
-        params.set('bi', btoa(encodeURIComponent(JSON.stringify(customBadges))))
-    }
-
     return params.toString()
 }
 
 // ── Decode URL query string → settings ──────────────────────
+// badge ไม่อยู่ใน URL แล้ว — โหลดแยกผ่าน readBadgeStorage()
 export function decodeSettingsFromUrl(search: string): Partial<OverlaySettings> {
     const params = new URLSearchParams(search)
     const result: Partial<OverlaySettings> = {}
 
     for (const [key, raw] of params.entries()) {
-        if (key === 'bi') {
-            // decode badgeImages
-            try {
-                const json = decodeURIComponent(atob(raw))
-                const custom = JSON.parse(json) as Partial<BadgeImages>
-                result.badgeImages = { ...DEFAULT_BADGE_IMAGES, ...custom }
-            } catch { /* ignore corrupt param */ }
-            continue
-        }
         const field = REVERSE_MAP[key]
         if (!field) continue
             ; (result as any)[field] = NUMERIC_FIELDS.has(field) ? Number(raw) : raw
@@ -243,21 +221,47 @@ export function decodeSettingsFromUrl(search: string): Partial<OverlaySettings> 
 }
 
 // ── localStorage ─────────────────────────────────────────────
-const STORAGE_KEY = 'twitch-overlay-settings-v2'
+// แยก key สำหรับ settings (ไม่มี badge) และ badge images
+// เพื่อป้องกัน HTTP 431 — badge ไม่ผ่าน URL เด็ดขาด
+const STORAGE_KEY = 'twitch-overlay-settings-v3'   // bump version เพื่อ clear cache เก่า
+const BADGE_KEY = 'twitch-overlay-badges-v1'
 
-function readStorage(): OverlaySettings | null {
+/** อ่าน settings (ไม่รวม badge) จาก localStorage */
+function readStorage(): Omit<OverlaySettings, 'badgeImages'> | null {
     if (typeof localStorage === 'undefined') return null
     try {
         const raw = localStorage.getItem(STORAGE_KEY)
         if (!raw) return null
         const parsed = JSON.parse(raw)
-        // merge badgeImages แยก เพื่อรองรับ field ใหม่ที่เพิ่มใน future
-        return {
-            ...DEFAULT_SETTINGS,
-            ...parsed,
-            badgeImages: { ...DEFAULT_BADGE_IMAGES, ...parsed.badgeImages },
-        }
+        const { badgeImages: _drop, ...rest } = parsed   // drop badge ถ้าหลงมาจาก version เก่า
+        return { ...DEFAULT_SETTINGS, ...rest }
     } catch { return null }
+}
+
+/** อ่าน badge images จาก localStorage แยก key */
+function readBadgeStorage(): BadgeImages {
+    if (typeof localStorage === 'undefined') return { ...DEFAULT_BADGE_IMAGES }
+    try {
+        const raw = localStorage.getItem(BADGE_KEY)
+        if (!raw) return { ...DEFAULT_BADGE_IMAGES }
+        const parsed = JSON.parse(raw) as Partial<BadgeImages>
+        return { ...DEFAULT_BADGE_IMAGES, ...parsed }
+    } catch { return { ...DEFAULT_BADGE_IMAGES } }
+}
+
+/** บันทึก badge images ลง localStorage แยก key */
+function writeBadgeStorage(bi: BadgeImages) {
+    if (typeof localStorage === 'undefined') return
+    // บันทึกเฉพาะ custom badges (ที่ต่างจาก default) เพื่อประหยัด space
+    const custom: Partial<BadgeImages> = {}
+    for (const [k, v] of Object.entries(bi) as [keyof BadgeImages, string][]) {
+        if (v !== DEFAULT_BADGE_IMAGES[k]) custom[k] = v
+    }
+    if (Object.keys(custom).length > 0) {
+        localStorage.setItem(BADGE_KEY, JSON.stringify(custom))
+    } else {
+        localStorage.removeItem(BADGE_KEY)
+    }
 }
 
 // ── Composable ───────────────────────────────────────────────
@@ -267,40 +271,55 @@ export function useOverlaySettings() {
         badgeImages: { ...DEFAULT_BADGE_IMAGES },
     }))
 
-    /** load() — หน้า /settings: โหลดจาก localStorage */
+    /** load() — หน้า /settings: โหลดจาก localStorage (settings + badge แยก key) */
     function load() {
         const stored = readStorage()
-        if (stored) settings.value = stored
-        applyCssVars(settings.value)
-    }
-
-    /** save() — หน้า /settings: บันทึกลง localStorage + apply preview */
-    function save() {
-        if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings.value))
+        const badges = readBadgeStorage()
+        settings.value = {
+            ...(stored ?? DEFAULT_SETTINGS),
+            badgeImages: badges,
         }
         applyCssVars(settings.value)
     }
 
-    /** loadFromUrl() — หน้า / (OBS overlay): decode จาก URL params */
+    /** save() — หน้า /settings: บันทึก settings + badge แยก key */
+    function save() {
+        if (typeof localStorage !== 'undefined') {
+            // บันทึก settings โดยไม่รวม badgeImages
+            const { badgeImages, ...rest } = settings.value
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(rest))
+            writeBadgeStorage(badgeImages)
+        }
+        applyCssVars(settings.value)
+    }
+
+    /**
+     * loadFromUrl() — หน้า / (OBS overlay)
+     * โหลด settings จาก URL params + badge จาก localStorage
+     * badge ไม่ผ่าน URL → ไม่เกิด HTTP 431
+     */
     function loadFromUrl() {
         if (typeof window === 'undefined') return
         const fromUrl = decodeSettingsFromUrl(window.location.search)
+        const badges = readBadgeStorage()
         settings.value = {
             ...DEFAULT_SETTINGS,
-            badgeImages: { ...DEFAULT_BADGE_IMAGES },
             ...fromUrl,
+            badgeImages: badges,   // badge มาจาก localStorage เสมอ
         }
         applyCssVars(settings.value)
     }
 
-    /** buildObsUrl() — หน้า /settings: สร้าง URL พร้อม params ทั้งหมด */
+    /** buildObsUrl() — URL มีแค่ non-image settings → ปลอดภัย ไม่เกิน header limit */
     function buildObsUrl(base: string): string {
         return `${base}?${encodeSettingsToUrl(settings.value)}`
     }
 
     function reset() {
         settings.value = { ...DEFAULT_SETTINGS, badgeImages: { ...DEFAULT_BADGE_IMAGES } }
+        if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem(BADGE_KEY)
+        }
         save()
     }
 

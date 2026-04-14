@@ -85,12 +85,12 @@ const badgeFields = [
     // { key: 'subscriber', label: 'Sub Tier 1', tier: '1' },
     // { key: 'sub2', label: 'Sub Tier 2', tier: '2' },
     // { key: 'sub3', label: 'Sub Tier 3', tier: '3' },
-    { key: 'sub_1month', label: 'Sub 1 Month', tier: '1 Month' },
-    { key: 'sub_2month', label: 'Sub 2 Month', tier: '2 Month' },
-    { key: 'sub_3month', label: 'Sub 3 Month', tier: '3 Month' },
-    { key: 'sub_6month', label: 'Sub 6 Month', tier: '6 Month' },
-    { key: 'sub_9month', label: 'Sub 9 Month', tier: '9 Month' },
-    { key: 'sub_1year', label: 'Sub 1 Year', tier: '1 Year' },
+    { key: 'sub_1month', label: 'SUBSCRIBER', tier: '1 Month' },
+    { key: 'sub_2month', label: 'SUBSCRIBER', tier: '2 Month' },
+    { key: 'sub_3month', label: 'SUBSCRIBER', tier: '3 Month' },
+    { key: 'sub_6month', label: 'SUBSCRIBER', tier: '6 Month' },
+    { key: 'sub_9month', label: 'SUBSCRIBER', tier: '9 Month' },
+    { key: 'sub_1year', label: 'SUBSCRIBER', tier: '1 Year' },
     // { key: 'prime', label: 'Prime', tier: '' },
     // { key: 'turbo', label: 'Turbo', tier: '' },
     // { key: 'partner', label: 'Partner', tier: '' },
@@ -107,20 +107,48 @@ function fileToBase64(file: File): Promise<string> {
     })
 }
 
+// ตรวจ pixel dimension ของ PNG ผ่าน Image object
+function checkImageDimension(dataUrl: string, maxPx = 72): Promise<boolean> {
+    return new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => resolve(img.naturalWidth <= maxPx && img.naturalHeight <= maxPx)
+        img.onerror = () => resolve(false)
+        img.src = dataUrl
+    })
+}
+
+const ALLOWED_MIME: Record<string, string> = {
+    'image/png': 'PNG',
+    'image/svg+xml': 'SVG',
+}
+const MAX_BADGE_PX = 72
+
 async function handleBadgeUpload(key: string, event: Event) {
     const input = event.target as HTMLInputElement
     const file = input.files?.[0]
     if (!file) return
 
-    // validate: รองรับแค่ PNG, GIF, WEBP, JPG
-    if (!file.type.startsWith('image/')) {
-        alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น')
+    // reset input เพื่อให้ onchange ยิงซ้ำได้ถ้า user เลือกไฟล์เดิม
+    input.value = ''
+
+    // validate ประเภทไฟล์: รองรับแค่ PNG และ SVG
+    if (!ALLOWED_MIME[file.type]) {
+        alert('รองรับเฉพาะไฟล์ PNG และ SVG เท่านั้น')
         return
     }
 
-    // แปลงเป็น base64 แล้วบันทึก
     const base64 = await fileToBase64(file)
-        ; (s.value.badgeImages as any)[key] = base64
+
+    // SVG เป็น vector ไม่มี pixel dimension จริง → ข้ามการตรวจขนาด
+    if (file.type === 'image/png') {
+        const ok = await checkImageDimension(base64, MAX_BADGE_PX)
+        if (!ok) {
+            alert(`PNG ต้องมีขนาดไม่เกิน ${MAX_BADGE_PX}×${MAX_BADGE_PX} pixel`)
+            return
+        }
+    }
+
+    ; (s.value.badgeImages as any)[key] = base64
     save()
 }
 
@@ -135,25 +163,37 @@ const previewMsgs = computed(() => [
         id: 1, user: s.value.channel || 'Broadcaster',
         color: s.value.colorBroadcaster,
         badgeSrc: s.value.badgeImages.broadcaster,
-        text: 'สวัสดีทุกคนนน! ยินดีต้อนรับ 🎉',
+        text: 'สวัสดีทุกคนนน!  หมาป่าสุดหล่อมาแล้ววว! 🐺✨',
     },
     {
         id: 2, user: 'ModeratorBot',
         color: s.value.colorModerator,
         badgeSrc: s.value.badgeImages.moderator,
-        text: 'ห้ามสแปมนะครับ ขอบคุณที่ช่วย moderate',
+        text: 'ห้ามสแปมนะครับ ไม่งั้นจะโดนปิ้ว ๆ 🔫',
     },
     {
-        id: 3, user: 'SubFan2000',
+        id: 3, user: 'Subscriber123',
         color: s.value.colorSubscriber,
-        badgeSrc: s.value.badgeImages.subscriber,
-        text: 'โห สตรีมดีมากเลยวันนี้! ข้อความยาวๆๆๆ ทดสอบ long text',
+        badgeSrc: s.value.badgeImages.sub_1month,
+        text: 'พี่เรย์วันนี้ก็หล่อเหมือนเคยเลยครับ! 😍',
     },
     {
-        id: 4, user: 'NormalViewer',
+        id: 4, user: 'Subscriber888',
+        color: s.value.colorSubscriber,
+        badgeSrc: s.value.badgeImages.sub_6month,
+        text: 'สวัสดีครับพี่เรย์! นี่ผมเป็น subscriber เดือนที่ 6 แล้วนะ! 🎉 อยากให้พี่เรย์แนะนำเพลงใหม่ ๆ หน่อยครับ',
+    },
+    {
+        id: 5, user: 'SubscriberPro',
+        color: s.value.colorSubscriber,
+        badgeSrc: s.value.badgeImages.sub_1year,
+        text: 'ติดตามมาตั้งแต่ปีที่แล้วเลยครับ! รักพี่เรย์มาก ๆ ❤️',
+    },
+    {
+        id: 6, user: 'Viewer007',
         color: s.value.colorDefault,
         badgeSrc: '',
-        text: 'ฝนตกอีกแล้ว 🌧️',
+        text: 'สวัสดีครับ 🖖',
     },
 ])
 </script>
@@ -163,19 +203,26 @@ const previewMsgs = computed(() => [
         <div class="bg-grid" aria-hidden="true" />
         <div class="bg-glow" aria-hidden="true" />
 
-        <!-- HEADER -->
+        <!-- #region: HEADER -->
         <header class="page-header">
             <div class="header-inner">
                 <div class="logo-mark">
-                    <span class="logo-text">👻 Chat<em>Widget</em> Demo</span>
+                    <p class="logo-text">🐺 レイヱン Chat<em>Widget</em></p>
+                    <span class="logo-demo">Demo</span>
+                </div>
+
+                <div class="">
+                    <a href="https://x.com/ReienOkami" target="_blank" rel="noopener noreferrer" class="logo-credit">
+                        by @Okamitani Reien
+                    </a>
                 </div>
             </div>
         </header>
+        <!-- #endregion -->
 
-        <!-- MAIN -->
+        <!--  MAIN -->
         <main class="main-layout">
-            <aside class="settings-col">
-
+            <div class="settings-col">
                 <!-- Twitch -->
                 <section class="panel">
                     <h2 class="panel-title"><span class="panel-icon">🎮</span> Twitch</h2>
@@ -296,7 +343,7 @@ const previewMsgs = computed(() => [
                 <section class="panel">
                     <h2 class="panel-title"><span class="panel-icon">🏷️</span> Badge Custom</h2>
                     <p class="panel-desc">
-                        อัปโหลดรูป badge custom (PNG/GIF/WEBP ขนาดไม่เกิน 72x72)
+                        รองรับ .png และ .svg ขนาดไม่เกิน 72×72 pixel
                     </p>
 
                     <div class="badge-grid">
@@ -326,7 +373,7 @@ const previewMsgs = computed(() => [
                                     <line x1="12" y1="3" x2="12" y2="15" />
                                 </svg>
                                 Upload
-                                <input type="file" accept="image/*" class="badge-file-input"
+                                <input type="file" accept="image/png,image/svg+xml" class="badge-file-input"
                                     @change="handleBadgeUpload(bf.key, $event)" />
                             </label>
 
@@ -336,6 +383,23 @@ const previewMsgs = computed(() => [
                         </div>
                     </div>
                 </section>
+            </div>
+
+            <!-- PREVIEW -->
+            <div class="preview-col">
+                <!-- Actions -->
+                <div class="actions-row">
+                    <button class="btn btn-ghost" @click="handleReset">Reset to default</button>
+                    <button class="btn btn-primary" @click="handleSave">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+                            <polyline points="17,21 17,13 7,13 7,21" />
+                            <polyline points="7,3 7,8 15,8" />
+                        </svg>
+                        {{ saved ? '✓ Saved!' : 'Save & Preview' }}
+                    </button>
+                </div>
 
                 <!-- OBS URL Card -->
                 <div class="obs-url-card">
@@ -364,27 +428,11 @@ const previewMsgs = computed(() => [
                     </button>
                 </div>
 
-                <!-- Actions -->
-                <div class="actions-row">
-                    <button class="btn btn-ghost" @click="handleReset">Reset to default</button>
-                    <button class="btn btn-primary" @click="handleSave">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
-                            <polyline points="17,21 17,13 7,13 7,21" />
-                            <polyline points="7,3 7,8 15,8" />
-                        </svg>
-                        {{ saved ? '✓ Saved!' : 'Save & Preview' }}
-                    </button>
-                </div>
 
-            </aside>
 
-            <!-- PREVIEW -->
-            <div class="preview-col">
                 <div class="preview-header">
                     <span class="preview-label"><span class="panel-icon">💐 </span> Chat Preview</span>
-                    <span class="preview-hint">ปรับแต่งเพื่อดูผลลัพธ์ real-time</span>
+                    <span class="preview-hint">ปรับแต่งเพื่อดูผลลัพธ์</span>
                 </div>
                 <div class="preview-stage">
                     <div class="stream-bg" />
@@ -397,12 +445,15 @@ const previewMsgs = computed(() => [
                                     {{ msg.user }}
                                 </span>
                             </div>
+
                             <div class="preview-bubble" :style="{
                                 background: bubbleBgComputed,
                                 borderLeftColor: accentComputed,
                                 fontSize: s.fontSizeMsg + 'px',
                                 color: s.textColor,
-                            }">{{ msg.text }}</div>
+                            }">
+                                {{ msg.text }}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -428,11 +479,12 @@ const previewMsgs = computed(() => [
     --font-ui: 'Noto Serif JP', serif;
     --font-body-ui: 'Noto Sans Thai Looped', sans-serif;
     min-height: 100vh;
+    max-height: 100dvh;
     background: var(--bg);
     color: var(--text-primary);
     font-family: var(--font-body-ui);
     position: relative;
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
 .bg-grid {
@@ -462,16 +514,17 @@ const previewMsgs = computed(() => [
     position: sticky;
     top: 0;
     z-index: 50;
+    min-height: 60px;
+    max-height: 60px;
     background: rgba(9, 9, 15, 0.85);
     backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border);
 }
 
 .header-inner {
-    max-width: 1200px;
     margin: 0 auto;
     padding: 0 24px;
-    height: 56px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -479,8 +532,8 @@ const previewMsgs = computed(() => [
 
 .logo-mark {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    align-items: baseline;
+    gap: 6px;
 }
 
 .logo-text {
@@ -488,7 +541,7 @@ const previewMsgs = computed(() => [
     font-weight: 800;
     font-size: 18px;
     color: var(--text-primary);
-    letter-spacing: -0.02em;
+    letter-spacing: 0.02em;
 }
 
 .logo-text em {
@@ -496,16 +549,30 @@ const previewMsgs = computed(() => [
     color: v-bind(accentCssVar);
 }
 
+.logo-demo {
+    font-family: var(--font-ui);
+    font-weight: 600;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.logo-credit {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
 .main-layout {
     position: relative;
     z-index: 1;
-    max-width: 1200px;
+    max-height: calc(100dvh - 80px);
     margin: 0 auto;
     padding: 32px 24px 60px;
     display: grid;
     grid-template-columns: 440px 1fr;
     gap: 32px;
     align-items: start;
+    overflow: hidden;
 }
 
 @media (max-width: 860px) {
@@ -515,9 +582,19 @@ const previewMsgs = computed(() => [
 }
 
 .settings-col {
-    display: flex;
+    max-height: calc(100vh - 80px);
+    padding: 0 0 40px 0;
     flex-direction: column;
+    display: flex;
     gap: 16px;
+    overflow-y: auto;
+
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
 }
 
 .panel {
@@ -858,7 +935,6 @@ const previewMsgs = computed(() => [
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 10px 12px;
-    overflow-x: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
 }
@@ -949,8 +1025,7 @@ const previewMsgs = computed(() => [
 
 /* PREVIEW */
 .preview-col {
-    position: sticky;
-    top: 80px;
+    /* position: sticky; */
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -980,7 +1055,7 @@ const previewMsgs = computed(() => [
     border-radius: var(--radius);
     border: 1px solid var(--border);
     overflow: hidden;
-    min-height: 420px;
+    min-height: 540px;
     position: relative;
     background: #0f0f0f;
 }
