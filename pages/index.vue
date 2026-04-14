@@ -3,26 +3,20 @@ import tmi from 'tmi.js'
 
 /* ════════════════════════════════════════════
    SETTINGS — โหลดจาก URL query params
+   badge images รวมอยู่ใน settings.badgeImages แล้ว
 ════════════════════════════════════════════ */
 const { settings, loadFromUrl } = useOverlaySettings()
 onMounted(() => {
-
-    loadFromUrl()   // decode settings จาก URL query params → apply CSS vars
+    loadFromUrl()
 })
 
-/* ════════════════════════════════════════════
-   URL PARAM — ?channel=xxx override
-   ให้ใช้ channel ต่างกันได้โดยไม่แก้โค้ด
-   เช่น: ?channel=ReienOkami
-════════════════════════════════════════════ */
+/* URL PARAM — ?ch=xxx override channel */
 const route = useRoute()
 const channelParam = computed(() =>
-    (route.query.channel as string) || settings.value.channel || 'ReienOkami'
+    (route.query.ch as string) || (route.query.channel as string) || settings.value.channel || 'ReienOkami'
 )
 
-/* ════════════════════════════════════════════
-   CHAT STATE
-════════════════════════════════════════════ */
+/* CHAT STATE */
 const chats = ref<{
     id: number
     user: string
@@ -31,32 +25,14 @@ const chats = ref<{
     nameColor: string
 }[]>([])
 
-/* ════════════════════════════════════════════
-   CONNECTION STATUS
-════════════════════════════════════════════ */
+/* CONNECTION STATUS */
 const status = ref<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting')
-
 const statusText = computed(() => ({
     connecting: `กำลังเชื่อมต่อ #${channelParam.value}…`,
     connected: '',
     disconnected: 'หลุดการเชื่อมต่อ — กำลัง reconnect…',
     error: 'เชื่อมต่อไม่ได้ กรุณาตรวจสอบ channel name',
 }[status.value]))
-
-/* ════════════════════════════════════════════
-   BADGE CDN MAP
-════════════════════════════════════════════ */
-const BADGE_URLS: Record<string, string> = {
-    broadcaster: 'https://static-cdn.jtvnw.net/badges/v1/5527c58c-fb7d-422d-b71b-f309dcb85cc1/2',
-    moderator: 'https://static-cdn.jtvnw.net/badges/v1/3267646d-33f0-4b17-b3df-f923a41db1d0/2',
-    vip: 'https://static-cdn.jtvnw.net/badges/v1/b817aba4-fad8-49e2-b88a-7cc744dfa6ec/2',
-    subscriber: 'https://static-cdn.jtvnw.net/badges/v1/0e6c1a38-98a9-4d8a-b8f4-8f6bbf5e09c2/2',
-    turbo: 'https://static-cdn.jtvnw.net/badges/v1/bd444ec6-8f34-4bf9-91f4-af1e3428d80f/2',
-    partner: 'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/2',
-    prime: 'https://static-cdn.jtvnw.net/badges/v1/bbbe0db0-a598-423e-86d0-f9fb98ca1933/2',
-    staff: 'https://static-cdn.jtvnw.net/badges/v1/d97c37bd-a6f5-4c38-8f57-4e4bef88af34/2',
-    'sub-gifter': 'https://static-cdn.jtvnw.net/badges/v1/f1d8486f-eb2e-4553-b44f-4d614617afc1/2',
-}
 
 /* ════════════════════════════════════════════
    HELPERS
@@ -85,16 +61,48 @@ function parseEmotes(message: string, emotes?: Record<string, string[]>): string
     let result = message
     for (const { id, start, end } of positions) {
         const name = message.slice(start, end + 1)
-        // 3.0 = 3× resolution — คมชัดบน OBS 4K
         const img = `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${escapeHtml(name)}" title="${escapeHtml(name)}">`
         result = result.slice(0, start) + img + result.slice(end + 1)
     }
     return result
 }
 
-// แปลง badges object → icon HTML[] + nameColor
+/* ════════════════════════════════════════════
+   BADGE PARSER
+   ใช้รูปจาก settings.badgeImages
+   รองรับ: local path, base64 data URL, CDN URL
+
+   Twitch subscriber badge value format:
+   - value = tier * 1000 + months
+   - เช่น Tier1 3เดือน = "3", Tier2 6เดือน = "2006", Tier3 1ปี = "3012"
+   - months = Number(value) % 1000   (tier1 value < 1000 ดังนั้น months = value ตรงๆ)
+
+   เลือกรูป badge ตามระยะเวลา (months):
+   - 0        → subscriber (default / tier fallback)
+   - 1        → sub_1month
+   - 2        → sub_2month
+   - 3        → sub_3month
+   - 6        → sub_6month
+   - 9        → sub_9month
+   - 12+      → sub_1year
+════════════════════════════════════════════ */
+function getSubscriberBadgeSrc(value: string): string {
+    const bi = settings.value.badgeImages
+    const months = Number(value) % 1000   // แยก months ออกจาก tier prefix
+
+    if (months >= 12) return bi.sub_1year || bi.subscriber
+    if (months >= 9)  return bi.sub_9month || bi.subscriber
+    if (months >= 6)  return bi.sub_6month || bi.subscriber
+    if (months >= 3)  return bi.sub_3month || bi.subscriber
+    if (months >= 2)  return bi.sub_2month || bi.subscriber
+    if (months >= 1)  return bi.sub_1month || bi.subscriber
+    return bi.subscriber   // 0 months = เพิ่งซับ / fallback
+}
+
 function parseBadges(badges?: Record<string, string>): { icons: string[]; nameColor: string } {
     if (!badges) return { icons: [], nameColor: 'var(--color-default)' }
+
+    const bi = settings.value.badgeImages
 
     let nameColor = 'var(--color-default)'
     if (badges.broadcaster) nameColor = 'var(--color-broadcaster)'
@@ -103,10 +111,22 @@ function parseBadges(badges?: Record<string, string>): { icons: string[]; nameCo
     else if (badges.subscriber) nameColor = 'var(--color-subscriber)'
 
     const icons: string[] = []
+
     for (const [key, value] of Object.entries(badges)) {
-        const src = BADGE_URLS[key]
-        if (src) icons.push(`<img class="badge-img" src="${src}" alt="${key}" title="${key} ${value}">`)
+        let src = ''
+
+        if (key === 'subscriber') {
+            // เลือกรูปตามระยะเวลาการซับ
+            src = getSubscriberBadgeSrc(value)
+        } else {
+            src = (bi as any)[key] || ''
+        }
+
+        if (src) {
+            icons.push(`<img class="badge-img" src="${src}" alt="${key}" title="${key} ${value}">`)
+        }
     }
+
     return { icons, nameColor }
 }
 
@@ -129,7 +149,6 @@ function connect(channel: string) {
 
     client.on('connected', () => { status.value = 'connected' })
 
-    // หลุดการเชื่อมต่อ → รอ 5 วินาที แล้ว reconnect
     client.on('disconnected', (reason: string) => {
         console.warn('[TwitchChat] Disconnected:', reason)
         status.value = 'disconnected'
@@ -152,7 +171,6 @@ function connect(channel: string) {
     client.connect().catch((err: unknown) => {
         console.error('[TwitchChat] Error:', err)
         status.value = 'error'
-        // retry หลัง 10 วินาทีถ้า error (channel ผิด ฯลฯ)
         reconnectTimer = setTimeout(() => connect(channel), 10000)
     })
 }
@@ -167,19 +185,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <!--
-    หน้า / — Chat Overlay สำหรับ OBS Browser Source
-    
-    ใช้งาน:
-      http://localhost:3000/               → ใช้ channel จาก settings
-      http://localhost:3000/?channel=NAME  → override channel ผ่าน URL param
-      
-    OBS Custom CSS:
-      body { background: transparent !important; overflow: hidden; }
-  -->
     <div class="overlay-root">
 
-        <!-- ── Connection status (แสดงเฉพาะตอน connecting/error/disconnect) ── -->
+        <!-- Connection status -->
         <Transition name="status">
             <div v-if="status !== 'connected'" class="status-badge" :class="status">
                 <span class="status-dot" />
@@ -187,11 +195,10 @@ onUnmounted(() => {
             </div>
         </Transition>
 
-        <!-- ── Chat messages ── -->
+        <!-- Chat messages -->
         <TransitionGroup name="msg" tag="div" class="chat-list">
             <div v-for="msg in chats" :key="msg.id" class="chat-item">
 
-                <!-- Header: badges + username -->
                 <div class="chat-header">
                     <span v-for="(badge, i) in msg.badges" :key="i" class="badge-slot" v-html="badge" />
                     <span class="username" :style="{ color: msg.nameColor }">
@@ -199,7 +206,6 @@ onUnmounted(() => {
                     </span>
                 </div>
 
-                <!-- Message bubble -->
                 <div class="chat-bubble" v-html="msg.html" />
 
             </div>
@@ -209,7 +215,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* ── Root ────────────────────────────────────────────────── */
 .overlay-root {
     width: var(--chat-width);
     min-height: 100vh;
@@ -221,7 +226,6 @@ onUnmounted(() => {
     position: relative;
 }
 
-/* ── Status badge ────────────────────────────────────────── */
 .status-badge {
     position: absolute;
     top: 10px;
@@ -302,7 +306,6 @@ onUnmounted(() => {
     transform: translateY(-6px);
 }
 
-/* ── Chat list ───────────────────────────────────────────── */
 .chat-list {
     display: flex;
     flex-direction: column;
@@ -310,14 +313,12 @@ onUnmounted(() => {
     position: relative;
 }
 
-/* ── Message card ────────────────────────────────────────── */
 .chat-item {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-/* ── Header ──────────────────────────────────────────────── */
 .chat-header {
     display: flex;
     align-items: center;
@@ -342,7 +343,6 @@ onUnmounted(() => {
     line-height: 1;
 }
 
-/* ── Bubble ──────────────────────────────────────────────── */
 .chat-bubble {
     background: var(--bubble-bg);
     border: 1px solid rgba(255, 255, 255, 0.07);
@@ -370,10 +370,8 @@ onUnmounted(() => {
     margin: 0 2px;
 }
 
-/* ── Transitions ─────────────────────────────────────────── */
 .msg-enter-active {
-    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-        transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .msg-leave-active {

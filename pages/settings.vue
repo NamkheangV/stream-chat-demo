@@ -1,86 +1,68 @@
 <script setup lang="ts">
-// hexToRgbStr ถูก auto-import จาก utils/color.ts โดย Nuxt
 const { settings: s, save, reset, load, buildObsUrl } = useOverlaySettings()
 
-// ── Load settings on mount ─────────────────────────────────
 onMounted(() => load())
 
-// ── OBS URL — rebuild ทุกครั้งที่ settings เปลี่ยน ──────────
+/* OBS URL */
 const obsUrl = computed(() => {
     if (typeof window === 'undefined') return ''
-    // ตัด /settings ออกจาก path ให้ถูกต้องทั้ง dev และ GitHub Pages
-    // dev:          http://localhost:3000/settings → http://localhost:3000/
-    // GitHub Pages: https://user.github.io/repo/settings → https://user.github.io/repo/
     const path = window.location.pathname
     const basePath = path.endsWith('/settings')
         ? path.slice(0, -'/settings'.length) + '/'
         : path.replace(/\/settings\/?$/, '/')
-    const base = window.location.origin + basePath
-    return buildObsUrl(base)
+    return buildObsUrl(window.location.origin + basePath)
 })
 
-// ── Copy URL ────────────────────────────────────────────────
+/* Copy URL */
 const copied = ref(false)
 let copyTimer: ReturnType<typeof setTimeout>
-
 async function handleCopyUrl() {
     try {
         await navigator.clipboard.writeText(obsUrl.value)
-        copied.value = true
-        clearTimeout(copyTimer)
-        copyTimer = setTimeout(() => { copied.value = false }, 2500)
     } catch {
-        // fallback สำหรับ browser ที่ไม่รองรับ clipboard API
         const el = document.createElement('textarea')
         el.value = obsUrl.value
         document.body.appendChild(el)
         el.select()
         document.execCommand('copy')
         document.body.removeChild(el)
-        copied.value = true
-        copyTimer = setTimeout(() => { copied.value = false }, 2500)
     }
+    copied.value = true
+    clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => { copied.value = false }, 2500)
 }
 
-// ── Save feedback ──────────────────────────────────────────
+/* Save / Reset */
 const saved = ref(false)
 let saveTimer: ReturnType<typeof setTimeout>
-
 function handleSave() {
     save()
     saved.value = true
     clearTimeout(saveTimer)
     saveTimer = setTimeout(() => { saved.value = false }, 2000)
 }
-
 function handleReset() {
-    if (confirm('Reset ทุก settings กลับเป็น default?')) {
-        reset()
-    }
+    if (confirm('Reset ทุก settings กลับเป็น default?')) reset()
 }
 
-// Debounced auto-save เมื่อ slider/input เปลี่ยน
 let debounceTimer: ReturnType<typeof setTimeout>
 function debouncedSave() {
     clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => save(), 300)
 }
 
-// ── Computed preview colors ────────────────────────────────
+/* Preview colors */
 const bubbleBgComputed = computed(() => {
     const rgb = hexToRgbStr(s.value.bubbleBgColor)
     return `rgba(${rgb}, ${s.value.bubbleOpacity / 100})`
 })
-
 const accentComputed = computed(() => {
     const rgb = hexToRgbStr(s.value.accentColor)
     return `rgba(${rgb}, ${s.value.accentOpacity / 100})`
 })
-
-// ── CSS var for accent preview (logo) ─────────────────────
 const accentCssVar = computed(() => s.value.accentColor)
 
-// ── Role fields config ─────────────────────────────────────
+/* Role fields */
 const roleFields = [
     { key: 'colorBroadcaster', label: 'Broadcaster' },
     { key: 'colorModerator', label: 'Moderator' },
@@ -89,32 +71,86 @@ const roleFields = [
     { key: 'colorDefault', label: 'Viewer' },
 ]
 
-// ── Preview messages (fake data) ──────────────────────────
+/* ════════════════════════════════════════════
+   BADGE IMAGE UPLOAD
+   แต่ละ badge มี input[type=file] ของตัวเอง
+   เมื่อเลือกไฟล์ → แปลงเป็น Base64 data URL
+   → บันทึกใน settings.badgeImages[key]
+   → encode ลงใน OBS URL อัตโนมัติ
+════════════════════════════════════════════ */
+const badgeFields = [
+    { key: 'broadcaster', label: 'Broadcaster', tier: '' },
+    { key: 'moderator', label: 'Moderator', tier: '' },
+    { key: 'vip', label: 'VIP', tier: '' },
+    // { key: 'subscriber', label: 'Sub Tier 1', tier: '1' },
+    // { key: 'sub2', label: 'Sub Tier 2', tier: '2' },
+    // { key: 'sub3', label: 'Sub Tier 3', tier: '3' },
+    { key: 'sub_1month', label: 'Sub 1 Month', tier: '1 Month' },
+    { key: 'sub_2month', label: 'Sub 2 Month', tier: '2 Month' },
+    { key: 'sub_3month', label: 'Sub 3 Month', tier: '3 Month' },
+    { key: 'sub_6month', label: 'Sub 6 Month', tier: '6 Month' },
+    { key: 'sub_9month', label: 'Sub 9 Month', tier: '9 Month' },
+    { key: 'sub_1year', label: 'Sub 1 Year', tier: '1 Year' },
+    // { key: 'prime', label: 'Prime', tier: '' },
+    // { key: 'turbo', label: 'Turbo', tier: '' },
+    // { key: 'partner', label: 'Partner', tier: '' },
+    // { key: 'sub-gifter', label: 'Gift Sub', tier: '' },
+]
+
+// แปลง File → base64 data URL
+function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+    })
+}
+
+async function handleBadgeUpload(key: string, event: Event) {
+    const input = event.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+
+    // validate: รองรับแค่ PNG, GIF, WEBP, JPG
+    if (!file.type.startsWith('image/')) {
+        alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น')
+        return
+    }
+
+    // แปลงเป็น base64 แล้วบันทึก
+    const base64 = await fileToBase64(file)
+        ; (s.value.badgeImages as any)[key] = base64
+    save()
+}
+
+function resetBadge(key: string) {
+    ; (s.value.badgeImages as any)[key] = (DEFAULT_BADGE_IMAGES as any)[key]
+    save()
+}
+
+// Preview messages
 const previewMsgs = computed(() => [
     {
-        id: 1,
-        user: s.value.channel || 'Broadcaster',
+        id: 1, user: s.value.channel || 'Broadcaster',
         color: s.value.colorBroadcaster,
-        badgeSrc: 'https://static-cdn.jtvnw.net/badges/v1/5527c58c-fb7d-422d-b71b-f309dcb85cc1/2',
+        badgeSrc: s.value.badgeImages.broadcaster,
         text: 'สวัสดีทุกคนนน! ยินดีต้อนรับ 🎉',
     },
     {
-        id: 2,
-        user: 'ModeratorBot',
+        id: 2, user: 'ModeratorBot',
         color: s.value.colorModerator,
-        badgeSrc: 'https://static-cdn.jtvnw.net/badges/v1/3267646d-33f0-4b17-b3df-f923a41db1d0/2',
+        badgeSrc: s.value.badgeImages.moderator,
         text: 'ห้ามสแปมนะครับ ขอบคุณที่ช่วย moderate',
     },
     {
-        id: 3,
-        user: 'SubFan2000',
+        id: 3, user: 'SubFan2000',
         color: s.value.colorSubscriber,
-        badgeSrc: 'https://static-cdn.jtvnw.net/badges/v1/0e6c1a38-98a9-4d8a-b8f4-8f6bbf5e09c2/2',
-        text: 'โห สตรีมดีมากเลยวันนี้! ข้อความยาวๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆๆ ทดสอบ long text',
+        badgeSrc: s.value.badgeImages.subscriber,
+        text: 'โห สตรีมดีมากเลยวันนี้! ข้อความยาวๆๆๆ ทดสอบ long text',
     },
     {
-        id: 4,
-        user: 'NormalViewer',
+        id: 4, user: 'NormalViewer',
         color: s.value.colorDefault,
         badgeSrc: '',
         text: 'ฝนตกอีกแล้ว 🌧️',
@@ -124,49 +160,25 @@ const previewMsgs = computed(() => [
 
 <template>
     <div class="settings-root">
-
-        <!-- ════ BACKGROUND DECORATION ════ -->
         <div class="bg-grid" aria-hidden="true" />
         <div class="bg-glow" aria-hidden="true" />
 
-        <!-- ════ PAGE HEADER ════ -->
+        <!-- HEADER -->
         <header class="page-header">
             <div class="header-inner">
                 <div class="logo-mark">
-                    <!-- <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                        <rect x="0" y="0" width="12" height="12" rx="3" fill="var(--accent-preview)" />
-                        <rect x="16" y="0" width="12" height="12" rx="3" fill="var(--accent-preview)" opacity="0.5" />
-                        <rect x="0" y="16" width="12" height="12" rx="3" fill="var(--accent-preview)" opacity="0.5" />
-                        <rect x="16" y="16" width="12" height="12" rx="3" fill="var(--accent-preview)" />
-                    </svg> -->
                     <span class="logo-text">👻 Chat<em>Widget</em> Demo</span>
                 </div>
-
-                <!-- <nav class="header-nav">
-                    <NuxtLink to="/" class="nav-btn" target="_blank">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-                            <polyline points="15,3 21,3 21,9" />
-                            <line x1="10" y1="14" x2="21" y2="3" />
-                        </svg>
-                        เปิด Overlay
-                    </NuxtLink>
-                </nav> -->
             </div>
         </header>
 
-        <!-- ════ MAIN LAYOUT: settings left + preview right ════ -->
+        <!-- MAIN -->
         <main class="main-layout">
-
-            <!-- ── LEFT: Settings Panels ─────────────────────────── -->
             <aside class="settings-col">
 
-                <!-- ── SECTION: Twitch ── -->
+                <!-- Twitch -->
                 <section class="panel">
-                    <h2 class="panel-title">
-                        <span class="panel-icon">📡</span> Twitch
-                    </h2>
+                    <h2 class="panel-title"><span class="panel-icon">🎮</span> Twitch</h2>
                     <div class="field">
                         <label class="field-label">Channel name</label>
                         <input v-model="s.channel" class="input" placeholder="your_channel" @input="debouncedSave" />
@@ -181,12 +193,9 @@ const previewMsgs = computed(() => [
                     </div>
                 </section>
 
-                <!-- ── SECTION: Bubble ── -->
+                <!-- Chat Bubble -->
                 <section class="panel">
-                    <h2 class="panel-title">
-                        <span class="panel-icon">💬</span> Chat Bubble
-                    </h2>
-
+                    <h2 class="panel-title"><span class="panel-icon">💬</span> Chat Bubble</h2>
                     <div class="field-row">
                         <div class="field">
                             <label class="field-label">Background color</label>
@@ -202,7 +211,6 @@ const previewMsgs = computed(() => [
                                 @input="debouncedSave" />
                         </div>
                     </div>
-
                     <div class="field-row">
                         <div class="field">
                             <label class="field-label">Accent bar color</label>
@@ -220,12 +228,9 @@ const previewMsgs = computed(() => [
                     </div>
                 </section>
 
-                <!-- ── SECTION: Typography ── -->
+                <!-- Typography -->
                 <section class="panel">
-                    <h2 class="panel-title">
-                        <span class="panel-icon">✏️</span> Typography
-                    </h2>
-
+                    <h2 class="panel-title"><span class="panel-icon">✏️</span> Typography</h2>
                     <div class="field-row">
                         <div class="field">
                             <label class="field-label">Text color</label>
@@ -235,7 +240,6 @@ const previewMsgs = computed(() => [
                             </div>
                         </div>
                     </div>
-
                     <div class="field-row">
                         <div class="field">
                             <label class="field-label">Message size {{ s.fontSizeMsg }}px</label>
@@ -250,12 +254,9 @@ const previewMsgs = computed(() => [
                     </div>
                 </section>
 
-                <!-- ── SECTION: Layout ── -->
+                <!-- Layout -->
                 <section class="panel">
-                    <h2 class="panel-title">
-                        <span class="panel-icon">📐</span> Layout
-                    </h2>
-
+                    <h2 class="panel-title"><span class="panel-icon">📐</span> Layout</h2>
                     <div class="field-row">
                         <div class="field">
                             <label class="field-label">Width {{ s.chatWidth }}px</label>
@@ -270,26 +271,73 @@ const previewMsgs = computed(() => [
                     </div>
                 </section>
 
-                <!-- ── SECTION: Role colors ── -->
+                <!-- Username colors -->
                 <section class="panel">
-                    <h2 class="panel-title">
-                        <span class="panel-icon">🎭</span> Username colors
-                    </h2>
+                    <h2 class="panel-title"><span class="panel-icon">⚙️</span> Username colors</h2>
                     <div class="role-grid">
                         <div v-for="role in roleFields" :key="role.key" class="field">
                             <label class="field-label">{{ role.label }}</label>
                             <div class="color-row">
                                 <input type="color" v-model="(s as any)[role.key]" class="color-swatch"
                                     @input="debouncedSave" />
-                                <span class="role-preview" :style="{ color: (s as any)[role.key] }">
-                                    {{ role.label }}
-                                </span>
+                                <span class="role-preview" :style="{ color: (s as any)[role.key] }">{{ role.label
+                                }}</span>
                             </div>
                         </div>
                     </div>
                 </section>
 
-                <!-- ── OBS URL CARD ── -->
+                <!-- ══════════════════════════════════════
+             BADGE Custom — section ใหม่
+             อัปโหลดรูป badge แทน Twitch CDN
+             รูปจะถูกแปลงเป็น Base64 และ encode
+             ลง URL พร้อมกับ settings อื่น ๆ
+        ══════════════════════════════════════ -->
+                <section class="panel">
+                    <h2 class="panel-title"><span class="panel-icon">🏷️</span> Badge Custom</h2>
+                    <p class="panel-desc">
+                        อัปโหลดรูป badge custom (PNG/GIF/WEBP ขนาดไม่เกิน 72x72)
+                    </p>
+
+                    <div class="badge-grid">
+                        <div v-for="bf in badgeFields" :key="bf.key" class="badge-item">
+                            <!-- Preview รูปปัจจุบัน -->
+                            <div class="badge-preview-wrap">
+                                <img :src="(s.badgeImages as any)[bf.key]" class="badge-preview-img" :alt="bf.label"
+                                    @error="(e) => (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\'><rect width=\'32\' height=\'32\' fill=\'%23333\' rx=\'6\'/><text x=\'50%25\' y=\'55%25\' text-anchor=\'middle\' dominant-baseline=\'middle\' font-size=\'14\' fill=\'%23666\'>?</text></svg>'" />
+                                <!-- indicator ว่าเป็น custom หรือ default -->
+                                <span class="badge-source-tag"
+                                    :class="(s.badgeImages as any)[bf.key].startsWith('data:') ? 'custom' : 'default'">
+                                    {{ (s.badgeImages as any)[bf.key].startsWith('data:') ? 'custom' : 'default' }}
+                                </span>
+                            </div>
+
+                            <div class="badge-info">
+                                <span class="badge-label">{{ bf.label }}</span>
+                                <span v-if="bf.tier" class="badge-tier">{{ bf.tier }}</span>
+                            </div>
+
+                            <!-- Upload button -->
+                            <label class="badge-upload-btn">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.5">
+                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                </svg>
+                                Upload
+                                <input type="file" accept="image/*" class="badge-file-input"
+                                    @change="handleBadgeUpload(bf.key, $event)" />
+                            </label>
+
+                            <!-- Reset กลับ default -->
+                            <button v-if="(s.badgeImages as any)[bf.key].startsWith('data:')" class="badge-reset-btn"
+                                @click="resetBadge(bf.key)" title="Reset กลับ default">✕</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- OBS URL Card -->
                 <div class="obs-url-card">
                     <div class="obs-url-header">
                         <span class="obs-url-title">
@@ -316,11 +364,9 @@ const previewMsgs = computed(() => [
                     </button>
                 </div>
 
-                <!-- ── ACTIONS ── -->
+                <!-- Actions -->
                 <div class="actions-row">
-                    <button class="btn btn-ghost" @click="handleReset">
-                        Reset to default
-                    </button>
+                    <button class="btn btn-ghost" @click="handleReset">Reset to default</button>
                     <button class="btn btn-primary" @click="handleSave">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.5">
@@ -334,25 +380,16 @@ const previewMsgs = computed(() => [
 
             </aside>
 
-            <!-- ── RIGHT: Live Preview ─────────────────────────────── -->
+            <!-- PREVIEW -->
             <div class="preview-col">
                 <div class="preview-header">
-                    <span class="preview-label">Live Preview</span>
-                    <span class="preview-hint">ปรับ slider ซ้ายเพื่อดูผล real-time</span>
+                    <span class="preview-label"><span class="panel-icon">💐 </span> Chat Preview</span>
+                    <span class="preview-hint">ปรับแต่งเพื่อดูผลลัพธ์ real-time</span>
                 </div>
-
-                <!-- Preview container ขนาด simulate OBS -->
                 <div class="preview-stage">
-                    <!-- Dark stream BG for reference -->
                     <div class="stream-bg" />
-
-                    <!-- Chat overlay preview — apply inline styles โดยตรง -->
-                    <div class="preview-overlay" :style="{
-                        width: s.chatWidth + 'px',
-                        gap: s.msgGap + 'px',
-                    }">
+                    <div class="preview-overlay" :style="{ width: s.chatWidth + 'px', gap: s.msgGap + 'px' }">
                         <div v-for="msg in previewMsgs" :key="msg.id" class="preview-item">
-                            <!-- Header -->
                             <div class="preview-header-row">
                                 <img v-if="msg.badgeSrc" :src="msg.badgeSrc" class="preview-badge" />
                                 <span class="preview-username"
@@ -360,15 +397,12 @@ const previewMsgs = computed(() => [
                                     {{ msg.user }}
                                 </span>
                             </div>
-                            <!-- Bubble -->
                             <div class="preview-bubble" :style="{
                                 background: bubbleBgComputed,
                                 borderLeftColor: accentComputed,
                                 fontSize: s.fontSizeMsg + 'px',
                                 color: s.textColor,
-                            }">
-                                {{ msg.text }}
-                            </div>
+                            }">{{ msg.text }}</div>
                         </div>
                     </div>
                 </div>
@@ -379,9 +413,6 @@ const previewMsgs = computed(() => [
 </template>
 
 <style scoped>
-/* ════════════════════════════════════════════════════════════
-   CSS Variables — Settings page theming
-════════════════════════════════════════════════════════════ */
 .settings-root {
     --bg: #09090f;
     --surface: #111118;
@@ -396,7 +427,6 @@ const previewMsgs = computed(() => [
     --radius-sm: 8px;
     --font-ui: 'Noto Serif JP', serif;
     --font-body-ui: 'Noto Sans Thai Looped', sans-serif;
-
     min-height: 100vh;
     background: var(--bg);
     color: var(--text-primary);
@@ -405,12 +435,10 @@ const previewMsgs = computed(() => [
     overflow-x: hidden;
 }
 
-/* ── Background decorations ────────────────────────────── */
 .bg-grid {
     position: fixed;
     inset: 0;
-    background-image:
-        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
     background-size: 40px 40px;
     pointer-events: none;
@@ -430,7 +458,6 @@ const previewMsgs = computed(() => [
     filter: blur(40px);
 }
 
-/* ── Header ─────────────────────────────────────────────── */
 .page-header {
     position: sticky;
     top: 0;
@@ -469,33 +496,6 @@ const previewMsgs = computed(() => [
     color: v-bind(accentCssVar);
 }
 
-.header-nav {
-    display: flex;
-    gap: 8px;
-}
-
-.nav-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text-primary);
-    font-size: 13px;
-    font-family: var(--font-body-ui);
-    text-decoration: none;
-    transition: border-color 0.15s, background 0.15s;
-    cursor: pointer;
-}
-
-.nav-btn:hover {
-    border-color: var(--border-hover);
-    background: var(--surface-2);
-}
-
-/* ── Main layout (2 columns) ─────────────────────────────── */
 .main-layout {
     position: relative;
     z-index: 1;
@@ -514,14 +514,12 @@ const previewMsgs = computed(() => [
     }
 }
 
-/* ── Settings column ─────────────────────────────────────── */
 .settings-col {
     display: flex;
     flex-direction: column;
     gap: 16px;
 }
 
-/* ── Panel card ──────────────────────────────────────────── */
 .panel {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -553,7 +551,12 @@ const previewMsgs = computed(() => [
     font-size: 15px;
 }
 
-/* ── Field ───────────────────────────────────────────────── */
+.panel-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
 .field {
     display: flex;
     flex-direction: column;
@@ -573,7 +576,6 @@ const previewMsgs = computed(() => [
     letter-spacing: 0.01em;
 }
 
-/* ── Input ───────────────────────────────────────────────── */
 .input {
     width: 100%;
     background: var(--surface-2);
@@ -594,10 +596,8 @@ const previewMsgs = computed(() => [
 .input-sm {
     padding: 7px 10px;
     font-size: 12px;
-    font-family: 'Noto Sans Thai Looped', sans-serif;
 }
 
-/* ── Color swatch ────────────────────────────────────────── */
 .color-row {
     display: flex;
     align-items: center;
@@ -620,7 +620,6 @@ const previewMsgs = computed(() => [
     border-color: var(--border-hover);
 }
 
-/* ── Slider ──────────────────────────────────────────────── */
 .slider-row {
     display: flex;
     align-items: center;
@@ -647,7 +646,6 @@ const previewMsgs = computed(() => [
     accent-color: v-bind(accentCssVar);
 }
 
-/* ── Role grid ───────────────────────────────────────────── */
 .role-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -660,7 +658,221 @@ const previewMsgs = computed(() => [
     font-size: 13px;
 }
 
-/* ── Action buttons ──────────────────────────────────────── */
+/* ════════════════════════════════════════════
+   BADGE GRID
+════════════════════════════════════════════ */
+.badge-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+}
+
+.badge-item {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    transition: border-color 0.15s;
+}
+
+.badge-item:hover {
+    border-color: var(--border-hover);
+}
+
+.badge-preview-wrap {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.badge-preview-img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    /* badge เล็กต้องชัด */
+    border-radius: 4px;
+}
+
+/* tag บอก source ของรูป */
+.badge-source-tag {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 1px 4px;
+    border-radius: 3px;
+    text-transform: uppercase;
+}
+
+.badge-source-tag.default {
+    background: rgba(100, 100, 120, 0.8);
+    color: #999;
+}
+
+.badge-source-tag.custom {
+    background: v-bind(accentCssVar);
+    color: #000;
+}
+
+.badge-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.badge-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.badge-tier {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* Upload button — label ครอบ input[file] ซ่อนอยู่ */
+.badge-upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-body-ui);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    transition: border-color 0.15s, color 0.15s;
+    width: 100%;
+    justify-content: center;
+}
+
+.badge-upload-btn:hover {
+    border-color: v-bind(accentCssVar);
+    color: var(--text-primary);
+}
+
+/* ซ่อน native file input */
+.badge-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Reset badge button */
+.badge-reset-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
+    font-size: 9px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+
+.badge-reset-btn:hover {
+    background: rgba(248, 113, 113, 0.4);
+}
+
+/* ════════════════════════════════════════════
+   OBS URL CARD
+════════════════════════════════════════════ */
+.obs-url-card {
+    background: var(--surface);
+    border: 1px solid v-bind(accentCssVar);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.obs-url-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at top left, v-bind(accentCssVar), transparent 70%);
+    opacity: 0.07;
+    pointer-events: none;
+}
+
+.obs-url-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.obs-url-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: v-bind(accentCssVar);
+}
+
+.obs-url-badge {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 10px;
+}
+
+.obs-url-box {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+.obs-url-text {
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    display: block;
+    line-height: 1.5;
+}
+
+/* Actions */
 .actions-row {
     display: flex;
     gap: 10px;
@@ -706,9 +918,36 @@ const previewMsgs = computed(() => [
     opacity: 0.88;
 }
 
-/* ════════════════════════════════════════════════════════════
-   PREVIEW COLUMN
-════════════════════════════════════════════════════════════ */
+.btn-obs {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: 100%;
+    padding: 11px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-family: var(--font-body-ui);
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    background: v-bind(accentCssVar);
+    color: #000;
+    letter-spacing: 0.02em;
+    transition: opacity 0.15s, transform 0.1s, box-shadow 0.2s;
+    box-shadow: 0 0 20px color-mix(in srgb, v-bind(accentCssVar) 40%, transparent);
+}
+
+.btn-obs:hover {
+    opacity: 0.88;
+    box-shadow: 0 0 28px color-mix(in srgb, v-bind(accentCssVar) 55%, transparent);
+}
+
+.btn-obs:active {
+    transform: scale(0.97);
+}
+
+/* PREVIEW */
 .preview-col {
     position: sticky;
     top: 80px;
@@ -737,7 +976,6 @@ const previewMsgs = computed(() => [
     color: var(--text-subtle);
 }
 
-/* Preview stage — simulate OBS scene */
 .preview-stage {
     border-radius: var(--radius);
     border: 1px solid var(--border);
@@ -747,21 +985,15 @@ const previewMsgs = computed(() => [
     background: #0f0f0f;
 }
 
-/* Fake stream gameplay background */
 .stream-bg {
     position: absolute;
     inset: 0;
     background:
         radial-gradient(ellipse at 30% 60%, rgba(60, 100, 150, 0.3) 0%, transparent 60%),
         radial-gradient(ellipse at 80% 20%, rgba(100, 60, 150, 0.2) 0%, transparent 50%),
-        repeating-linear-gradient(45deg,
-            rgba(255, 255, 255, 0.01) 0px,
-            rgba(255, 255, 255, 0.01) 1px,
-            transparent 1px,
-            transparent 16px);
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.01) 0px, rgba(255, 255, 255, 0.01) 1px, transparent 1px, transparent 16px);
 }
 
-/* The actual chat preview */
 .preview-overlay {
     position: absolute;
     bottom: 12px;
@@ -812,108 +1044,5 @@ const previewMsgs = computed(() => [
     word-break: break-word;
     font-family: var(--font-body-ui);
     transition: background 0.15s, border-color 0.15s, color 0.15s, font-size 0.2s;
-}
-</style>
-
-<style scoped>
-/* ── OBS URL Card ─────────────────────────────────────────── */
-.obs-url-card {
-    background: var(--surface);
-    border: 1px solid v-bind(accentCssVar);
-    border-radius: var(--radius);
-    padding: 18px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    position: relative;
-    overflow: hidden;
-}
-
-/* glow effect บน card */
-.obs-url-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse at top left, v-bind(accentCssVar), transparent 70%);
-    opacity: 0.07;
-    pointer-events: none;
-}
-
-.obs-url-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.obs-url-title {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-family: var(--font-ui);
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    color: v-bind(accentCssVar);
-}
-
-.obs-url-badge {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-muted);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 3px 10px;
-}
-
-/* URL text box */
-.obs-url-box {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 10px 12px;
-    overflow-x: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-}
-
-.obs-url-text {
-    font-family: 'Noto Sans Thai Looped', sans-serif;
-    font-size: 11px;
-    color: var(--text-muted);
-    white-space: nowrap;
-    display: block;
-    line-height: 1.5;
-}
-
-/* Copy button — เด่นกว่าปุ่มทั่วไป */
-.btn-obs {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    width: 100%;
-    padding: 11px 18px;
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    font-family: var(--font-body-ui);
-    font-weight: 700;
-    cursor: pointer;
-    border: none;
-    background: v-bind(accentCssVar);
-    color: #000;
-    letter-spacing: 0.02em;
-    transition: opacity 0.15s, transform 0.1s, box-shadow 0.2s;
-    box-shadow: 0 0 20px color-mix(in srgb, v-bind(accentCssVar) 40%, transparent);
-}
-
-.btn-obs:hover {
-    opacity: 0.88;
-    box-shadow: 0 0 28px color-mix(in srgb, v-bind(accentCssVar) 55%, transparent);
-}
-
-.btn-obs:active {
-    transform: scale(0.97);
 }
 </style>
