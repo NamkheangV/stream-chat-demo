@@ -6,7 +6,7 @@ Developed by [ReienOkami](https://x.com/ReienOkami)
 ## ⚙️ ตั้งค่าใน OBS
 
 1. Add Source → **Browser Source**
-2. URL: `https://namkheangv.github.io/stream-chat-demo/` (หรือ URL หลัง deploy)
+2. URL: `https://namkheangv.github.io/stream-chat-demo/`
 3. Width: ตามที่ตั้งไว้ใน settings (default: `340`)
 4. Height: `700` (หรือตามต้องการ)
 5. Custom CSS:
