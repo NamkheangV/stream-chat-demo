@@ -102,10 +102,10 @@ npm run dev
 - [ ] รองรับ Twitch API v5 (สำหรับ badge/emote ที่ไม่ได้อยู่ใน IRC)
 - [ ] เพิ่ม option ปรับ layout (เช่น bubble shape, spacing, animation)
 - [ ] เพิ่ม option ปรับ font family + weight
-- [ ] เพิ่มการเปลี่ยนพื้นหลัง (background) ของ preview (เช่น gradient, image)
+- [✓] เพิ่มการเปลี่ยนพื้นหลัง (background) ของ preview (เช่น gradient, image)
 
 — UX/UI
-- [ ] เพิ่ม loading ก่อนเข้าหน้า settings (ตอนดึงข้อมูลจาก Twitch API)
+- [✓] เพิ่ม loading ก่อนเข้าหน้า settings (ตอนดึงข้อมูลจาก Twitch API)
 - [ ] เพิ่ม loading state ในหน้า settings
 - [ ] เปลี่ยน background ในหน้า settings ให้เป็น animation หรือ ภาพขยับได้ (ตอนนี้เป็นแค่สีทึบๆ)
 - [ ] responsive design สำหรับมือถือ (ถ้าใครอยากปรับจากมือถือก็ได้)
